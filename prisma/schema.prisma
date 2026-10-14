@@ -1,0 +1,58 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum ReminderStatus {
+  SUCCESS
+  FAILED
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  name          String?
+  subscriptions Subscription[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Subscription {
+  id           String             @id @default(uuid())
+  name         String
+  amount       Float
+  billingDate  DateTime
+  billingCycle BillingCycle
+  status       SubscriptionStatus @default(ACTIVE)
+
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reminders    ReminderHistory[]
+
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+model ReminderHistory {
+  id             String         @id @default(uuid())
+  scheduledFor   DateTime
+  status         ReminderStatus
+  errorMessage   String?
+  sentAt         DateTime       @default(now())
+
+  subscriptionId String
+  subscription   Subscription   @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+}

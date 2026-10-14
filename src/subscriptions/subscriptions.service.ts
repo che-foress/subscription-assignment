@@ -30,13 +30,24 @@ export class SubscriptionsService {
    * Helper to ensure the referenced user exists before creating subscriptions.
    */
   async ensureUserExists(userId: string) {
+    const isEmail = userId.includes('@');
+    const email = isEmail
+      ? userId
+      : userId === 'demo-user-id' && process.env.SMTP_USER
+        ? process.env.SMTP_USER
+        : `${userId}@example.com`;
+    const name = isEmail ? userId.split('@')[0] : `User ${userId}`;
+
     return this.prisma.user.upsert({
       where: { id: userId },
-      update: {},
+      update: {
+        ...(process.env.SMTP_USER &&
+          userId === 'demo-user-id' && { email: process.env.SMTP_USER }),
+      },
       create: {
         id: userId,
-        email: `${userId}@example.com`,
-        name: `User ${userId}`,
+        email,
+        name,
       },
     });
   }

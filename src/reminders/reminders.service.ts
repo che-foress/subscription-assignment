@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { ReminderStatus, SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+import { EmailService } from './email.service';
 
 @Injectable()
 export class RemindersService {
@@ -11,6 +12,7 @@ export class RemindersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly subscriptionsService: SubscriptionsService,
+    private readonly emailService: EmailService,
   ) {}
 
   /**
@@ -18,12 +20,14 @@ export class RemindersService {
    */
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async handleCronReminders() {
-    this.logger.log('Starting automated payment reminder check...');
-    return this.processUpcomingReminders();
+    this.logger.log('Starting daily automated payment reminder check...');
+    return this.processUpcomingReminders(3);
   }
 
   /**
-   * Scans all active subscriptions and sends reminders for upcoming payments within the threshold days.
+   * Scans active subscriptions and sends reminder emails for billing dates falling within the next 3 days.
+   * Enforces duplicate prevention for the same subscription and billing date.
+   *
    * @param daysAhead Number of days before the billing date to trigger a reminder (default: 3 days)
    */
   async processUpcomingReminders(daysAhead: number = 3) {
@@ -31,10 +35,6 @@ export class RemindersService {
       where: { status: SubscriptionStatus.ACTIVE },
       include: {
         user: true,
-        reminders: {
-          orderBy: { sentAt: 'desc' },
-          take: 1,
-        },
       },
     });
 
@@ -53,23 +53,41 @@ export class RemindersService {
 
       // Check if billing date is within the window [now, now + daysAhead]
       if (nextBillingDate >= now && nextBillingDate <= thresholdDate) {
-        // Avoid sending duplicate reminders on the same day for this subscription
-        const lastReminder = sub.reminders[0];
-        const alreadySentToday =
-          lastReminder &&
-          new Date(lastReminder.sentAt).toDateString() === now.toDateString();
+        // PREVENT DUPLICATES: Check if a successful reminder has already been sent for this subscription & billing date
+        const existingSuccessReminder =
+          await this.prisma.reminderHistory.findFirst({
+            where: {
+              subscriptionId: sub.id,
+              scheduledFor: nextBillingDate,
+              status: ReminderStatus.SUCCESS,
+            },
+          });
 
-        if (alreadySentToday) {
+        if (existingSuccessReminder) {
+          this.logger.log(
+            `[DUPLICATE PREVENTED] Reminder already sent for subscription "${sub.name}" on billing date ${nextBillingDate.toISOString().split('T')[0]}`,
+          );
           continue;
         }
 
-        try {
-          // Log notification action (e.g. Email / Push dispatch)
-          this.logger.log(
-            `🔔 [REMINDER] Subscription "${sub.name}" ($${sub.amount}) for user ${sub.user.email} is due on ${nextBillingDate.toISOString().split('T')[0]}.`,
-          );
+        const msPerDay = 1000 * 60 * 60 * 24;
+        const diffTime = nextBillingDate.getTime() - now.getTime();
+        const daysLeft = Math.max(1, Math.ceil(diffTime / msPerDay));
 
-          // Record in ReminderHistory
+        try {
+          // Send reminder email to subscription owner
+          await this.emailService.sendReminderEmail({
+            to: sub.user.email,
+            userName: sub.user.name,
+            subscriptionName: sub.name,
+            amount: sub.amount,
+            billingDate: nextBillingDate,
+            subscriptionId: sub.id,
+            billingCycle: sub.billingCycle,
+            daysLeft,
+          });
+
+          // Store reminder history in the database with SUCCESS status
           const reminder = await this.prisma.reminderHistory.create({
             data: {
               subscriptionId: sub.id,
@@ -88,12 +106,14 @@ export class RemindersService {
             reminderId: reminder.id,
           });
         } catch (error) {
+          // Handle email delivery failures appropriately
           const errorMessage =
             error instanceof Error ? error.message : String(error);
           this.logger.error(
-            `Failed to send reminder for subscription ${sub.id}: ${errorMessage}`,
+            `Failed to send reminder for subscription "${sub.name}" (${sub.id}): ${errorMessage}`,
           );
 
+          // Store failure in reminder history
           await this.prisma.reminderHistory.create({
             data: {
               subscriptionId: sub.id,
@@ -101,6 +121,16 @@ export class RemindersService {
               status: ReminderStatus.FAILED,
               errorMessage,
             },
+          });
+
+          processed.push({
+            subscriptionId: sub.id,
+            subscriptionName: sub.name,
+            amount: sub.amount,
+            nextBillingDate,
+            userEmail: sub.user.email,
+            status: ReminderStatus.FAILED,
+            errorMessage,
           });
         }
       }
@@ -114,7 +144,7 @@ export class RemindersService {
   }
 
   /**
-   * Get reminder history for a specific user's subscriptions.
+   * Retrieve all reminder history for a user's subscriptions.
    */
   async getHistoryForUser(userId: string) {
     return this.prisma.reminderHistory.findMany({
@@ -132,6 +162,23 @@ export class RemindersService {
             billingCycle: true,
           },
         },
+      },
+      orderBy: {
+        sentAt: 'desc',
+      },
+    });
+  }
+
+  /**
+   * Retrieve reminder history for a specific subscription, ensuring ownership.
+   */
+  async getHistoryForSubscription(userId: string, subscriptionId: string) {
+    // Verify user owns the subscription
+    await this.subscriptionsService.findOne(userId, subscriptionId);
+
+    return this.prisma.reminderHistory.findMany({
+      where: {
+        subscriptionId,
       },
       orderBy: {
         sentAt: 'desc',

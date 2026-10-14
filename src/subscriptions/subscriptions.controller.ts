@@ -7,8 +7,13 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
+  ApiBody,
+  ApiConsumes,
   ApiHeader,
   ApiOperation,
   ApiParam,
@@ -32,6 +37,44 @@ import { SubscriptionsService } from './subscriptions.service';
 @Controller('subscriptions')
 export class SubscriptionsController {
   constructor(private readonly subscriptionsService: SubscriptionsService) {}
+
+  @Post('import')
+  @ApiOperation({
+    summary: 'Import subscriptions from a CSV file',
+    description:
+      'Uploads a CSV file with columns: name,amount,billingDate,billingCycle. Valid rows are imported; invalid rows are reported with row index and error message.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description:
+            'CSV file containing name, amount, billingDate, billingCycle',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description:
+      'Summary of imported vs rejected subscriptions with row-level error details.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Accept only CSV files or invalid file format.',
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  importSubscriptions(
+    @UserId() userId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.subscriptionsService.importFromCsv(userId, file);
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create a new subscription' })
@@ -112,5 +155,22 @@ export class SubscriptionsController {
   @ApiResponse({ status: 200, description: 'Subscription deleted.' })
   remove(@UserId() userId: string, @Param('id') id: string) {
     return this.subscriptionsService.remove(userId, id);
+  }
+
+  @Get(':id/reminders')
+  @ApiOperation({
+    summary: 'Get reminder history for a specific subscription',
+  })
+  @ApiParam({ name: 'id', description: 'Subscription UUID' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of reminder logs for this subscription.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Subscription not found for this user.',
+  })
+  getReminders(@UserId() userId: string, @Param('id') id: string) {
+    return this.subscriptionsService.getReminders(userId, id);
   }
 }

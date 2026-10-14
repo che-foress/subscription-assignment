@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { parse } from 'csv-parse/sync';
 import { BillingCycle, Subscription, SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
@@ -206,5 +211,137 @@ export class SubscriptionsService {
     });
 
     return { deleted: true, id };
+  }
+
+  /**
+   * Retrieve reminder history for a specific subscription, ensuring user ownership.
+   */
+  async getReminders(userId: string, id: string) {
+    await this.findOne(userId, id);
+
+    return this.prisma.reminderHistory.findMany({
+      where: { subscriptionId: id },
+      orderBy: { sentAt: 'desc' },
+    });
+  }
+
+  /**
+   * Import subscriptions from a CSV file for a given user.
+   * Validates each row, imports valid rows, skips invalid ones, and returns a detailed summary.
+   */
+  async importFromCsv(userId: string, file?: Express.Multer.File) {
+    if (!file || !file.buffer) {
+      throw new BadRequestException('A CSV file is required');
+    }
+
+    // 1. Accept only CSV files
+    const isCsvExtension = file.originalname?.toLowerCase().endsWith('.csv');
+    const isCsvMime =
+      file.mimetype === 'text/csv' ||
+      file.mimetype === 'application/vnd.ms-excel' ||
+      file.mimetype === 'text/plain';
+
+    if (!isCsvExtension && !isCsvMime) {
+      throw new BadRequestException('Accept only CSV files');
+    }
+
+    await this.ensureUserExists(userId);
+
+    // 2. Parse CSV rows
+    let records: Array<Record<string, string>> = [];
+    try {
+      records = parse(file.buffer, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+      });
+    } catch (parseError) {
+      const msg =
+        parseError instanceof Error ? parseError.message : String(parseError);
+      throw new BadRequestException(`Failed to parse CSV file: ${msg}`);
+    }
+
+    const totalRows = records.length;
+    let imported = 0;
+    let rejected = 0;
+    const errors: Array<{ row: number; message: string }> = [];
+
+    for (let i = 0; i < records.length; i++) {
+      const rowNumber = i + 1; // 1-based row index for imported rows
+      const row = records[i];
+      const rowErrors: string[] = [];
+
+      // Validate name
+      const name = row.name?.trim();
+      if (!name) {
+        rowErrors.push('Name is required');
+      }
+
+      // Validate amount
+      const rawAmount =
+        row.amount !== undefined ? String(row.amount).trim() : '';
+      const amount = parseFloat(rawAmount);
+      if (!rawAmount || isNaN(amount) || amount <= 0) {
+        rowErrors.push('Amount must be greater than zero');
+      }
+
+      // Validate billingDate
+      const rawDate = row.billingDate?.trim();
+      const billingDate = rawDate ? new Date(rawDate) : null;
+      if (!billingDate || isNaN(billingDate.getTime())) {
+        rowErrors.push('Invalid billing date');
+      }
+
+      // Validate billingCycle
+      const rawCycle = row.billingCycle?.trim().toUpperCase();
+      let cycle: BillingCycle | null = null;
+      if (
+        rawCycle === BillingCycle.MONTHLY ||
+        rawCycle === BillingCycle.YEARLY
+      ) {
+        cycle = rawCycle as BillingCycle;
+      } else {
+        rowErrors.push('Invalid billing cycle');
+      }
+
+      // If any validation error occurred, record it and skip saving this row
+      if (rowErrors.length > 0) {
+        rejected++;
+        errors.push({
+          row: rowNumber,
+          message: rowErrors.join('; '),
+        });
+        continue;
+      }
+
+      // Valid row -> import into database
+      try {
+        await this.prisma.subscription.create({
+          data: {
+            name: name!,
+            amount,
+            billingDate: billingDate!,
+            billingCycle: cycle!,
+            userId,
+          },
+        });
+        imported++;
+      } catch (dbError) {
+        rejected++;
+        const msg =
+          dbError instanceof Error ? dbError.message : String(dbError);
+        errors.push({
+          row: rowNumber,
+          message: `Database error: ${msg}`,
+        });
+      }
+    }
+
+    return {
+      totalRows,
+      imported,
+      rejected,
+      errors,
+    };
   }
 }

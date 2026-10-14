@@ -1,0 +1,293 @@
+{
+  "info": {
+    "_postman_id": "a5e9f82b-6582-4c2f-87a2-f673e51a66a1",
+    "name": "Subscription & Payment Reminder API",
+    "description": "Postman Collection for testing Subscription CRUD, Automated Reminders, and CSV Import.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "demo-user-id",
+      "type": "string"
+    },
+    {
+      "key": "subscriptionId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Subscriptions",
+      "item": [
+        {
+          "name": "Create Subscription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-user-id",
+                "value": "{{userId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Netflix\",\n  \"amount\": 15.99,\n  \"billingDate\": \"2026-10-18T00:00:00.000Z\",\n  \"billingCycle\": \"MONTHLY\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/subscriptions",
+              "host": ["{{baseUrl}}"],
+              "path": ["subscriptions"]
+            }
+          }
+        },
+        {
+          "name": "Get All Subscriptions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{userId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/subscriptions",
+              "host": ["{{baseUrl}}"],
+              "path": ["subscriptions"]
+            }
+          }
+        },
+        {
+          "name": "Filter Subscriptions by Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{userId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/subscriptions?status=ACTIVE",
+              "host": ["{{baseUrl}}"],
+              "path": ["subscriptions"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "ACTIVE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Active Subscriptions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{userId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/subscriptions/active",
+              "host": ["{{baseUrl}}"],
+              "path": ["subscriptions", "active"]
+            }
+          }
+        },
+        {
+          "name": "Get Subscription by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{userId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/subscriptions/{{subscriptionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["subscriptions", "{{subscriptionId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Subscription",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-user-id",
+                "value": "{{userId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 17.99\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/subscriptions/{{subscriptionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["subscriptions", "{{subscriptionId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Subscription Status (Cancel)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-user-id",
+                "value": "{{userId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CANCELLED\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/subscriptions/{{subscriptionId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["subscriptions", "{{subscriptionId}}", "status"]
+            }
+          }
+        },
+        {
+          "name": "Delete Subscription",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{userId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/subscriptions/{{subscriptionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["subscriptions", "{{subscriptionId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Subscription Reminder History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{userId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/subscriptions/{{subscriptionId}}/reminders",
+              "host": ["{{baseUrl}}"],
+              "path": ["subscriptions", "{{subscriptionId}}", "reminders"]
+            }
+          }
+        },
+        {
+          "name": "Import Subscriptions from CSV",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{userId}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/subscriptions/import",
+              "host": ["{{baseUrl}}"],
+              "path": ["subscriptions", "import"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reminders",
+      "item": [
+        {
+          "name": "Get All Reminder History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{userId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/reminders",
+              "host": ["{{baseUrl}}"],
+              "path": ["reminders"]
+            }
+          }
+        },
+        {
+          "name": "Trigger Upcoming Reminders Check",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reminders/trigger?daysAhead=3",
+              "host": ["{{baseUrl}}"],
+              "path": ["reminders", "trigger"],
+              "query": [
+                {
+                  "key": "daysAhead",
+                  "value": "3"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/",
+          "host": ["{{baseUrl}}"],
+          "path": [""]
+        }
+      }
+    }
+  ]
+}

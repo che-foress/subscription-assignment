@@ -13,6 +13,8 @@ describe('SubscriptionsController', () => {
     update: jest.fn(),
     updateStatus: jest.fn(),
     remove: jest.fn(),
+    getReminders: jest.fn(),
+    importFromCsv: jest.fn(),
   };
 
   beforeEach(async () => {

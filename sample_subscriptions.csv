@@ -1,0 +1,6 @@
+name,amount,billingDate,billingCycle
+Netflix,15.99,2026-10-18,MONTHLY
+Spotify,9.99,2026-10-25,MONTHLY
+iCloud,-2.00,2026-10-30,MONTHLY
+Amazon Prime,139.00,2026-11-01,YEARLY
+Gym Plan,50.00,2026-10-22,DAILY

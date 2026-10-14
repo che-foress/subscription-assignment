@@ -44,6 +44,10 @@ model Subscription {
 
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([userId, status])
 }
 
 model ReminderHistory {
@@ -55,4 +59,7 @@ model ReminderHistory {
 
   subscriptionId String
   subscription   Subscription   @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([subscriptionId, scheduledFor, status])
 }

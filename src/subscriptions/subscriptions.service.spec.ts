@@ -20,6 +20,7 @@ describe('SubscriptionsService', () => {
   };
 
   beforeEach(async () => {
+    jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SubscriptionsService,
@@ -105,6 +106,56 @@ describe('SubscriptionsService', () => {
       expect(result.id).toBe('sub-1');
       expect(result.nextBillingDate).toBeDefined();
       expect(mockPrisma.subscription.create).toHaveBeenCalled();
+    });
+  });
+
+  describe('importFromCsv', () => {
+    it('should reject non-CSV files with BadRequestException', async () => {
+      const mockPdfFile = {
+        originalname: 'subscriptions.pdf',
+        mimetype: 'application/pdf',
+        buffer: Buffer.from('dummy data'),
+      } as Express.Multer.File;
+
+      await expect(
+        service.importFromCsv('user-1', mockPdfFile),
+      ).rejects.toThrow('Accept only CSV files');
+    });
+
+    it('should parse, import valid rows, skip invalid rows, and report errors', async () => {
+      mockPrisma.user.upsert.mockResolvedValue({ id: 'user-1' });
+      mockPrisma.subscription.create.mockResolvedValue({ id: 'sub-created' });
+
+      const csvContent =
+        'name,amount,billingDate,billingCycle\n' +
+        'Netflix,15.99,2026-10-15,MONTHLY\n' +
+        'Spotify,9.99,2026-10-18,MONTHLY\n' +
+        'iCloud,-2.00,2026-10-20,MONTHLY\n' +
+        'Amazon Prime,139.00,2026-11-01,YEARLY\n' +
+        'Gym Plan,50.00,2026-10-22,DAILY';
+
+      const mockCsvFile = {
+        originalname: 'subscriptions.csv',
+        mimetype: 'text/csv',
+        buffer: Buffer.from(csvContent),
+      } as Express.Multer.File;
+
+      const summary = await service.importFromCsv('user-1', mockCsvFile);
+
+      expect(summary.totalRows).toBe(5);
+      expect(summary.imported).toBe(3);
+      expect(summary.rejected).toBe(2);
+      expect(summary.errors).toEqual([
+        {
+          row: 3,
+          message: 'Amount must be greater than zero',
+        },
+        {
+          row: 5,
+          message: 'Invalid billing cycle',
+        },
+      ]);
+      expect(mockPrisma.subscription.create).toHaveBeenCalledTimes(3);
     });
   });
 });

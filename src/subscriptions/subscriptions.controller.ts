@@ -26,6 +26,7 @@ import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 import { QuerySubscriptionDto } from './dto/query-subscription.dto';
 import { UpdateSubscriptionStatusDto } from './dto/update-status.dto';
 import { SubscriptionsService } from './subscriptions.service';
+import type { UploadedCsvFile } from './subscriptions.service';
 
 @ApiTags('subscriptions')
 @ApiHeader({
@@ -71,7 +72,7 @@ export class SubscriptionsController {
   @UseInterceptors(FileInterceptor('file'))
   importSubscriptions(
     @UserId() userId: string,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: UploadedCsvFile,
   ) {
     return this.subscriptionsService.importFromCsv(userId, file);
   }

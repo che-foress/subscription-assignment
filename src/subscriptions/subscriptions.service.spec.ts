@@ -1,7 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BillingCycle, SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { SubscriptionsService } from './subscriptions.service';
+import {
+  SubscriptionsService,
+  UploadedCsvFile,
+} from './subscriptions.service';
 
 describe('SubscriptionsService', () => {
   let service: SubscriptionsService;
@@ -115,7 +118,7 @@ describe('SubscriptionsService', () => {
         originalname: 'subscriptions.pdf',
         mimetype: 'application/pdf',
         buffer: Buffer.from('dummy data'),
-      } as Express.Multer.File;
+      } as UploadedCsvFile;
 
       await expect(
         service.importFromCsv('user-1', mockPdfFile),
@@ -138,7 +141,7 @@ describe('SubscriptionsService', () => {
         originalname: 'subscriptions.csv',
         mimetype: 'text/csv',
         buffer: Buffer.from(csvContent),
-      } as Express.Multer.File;
+      } as UploadedCsvFile;
 
       const summary = await service.importFromCsv('user-1', mockCsvFile);
 

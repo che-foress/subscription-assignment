@@ -13,6 +13,15 @@ export type EnrichedSubscription = Subscription & {
   nextBillingDate: Date | null;
 };
 
+export interface UploadedCsvFile {
+  fieldname?: string;
+  originalname: string;
+  encoding?: string;
+  mimetype?: string;
+  size?: number;
+  buffer: Buffer;
+}
+
 @Injectable()
 export class SubscriptionsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -229,7 +238,7 @@ export class SubscriptionsService {
    * Import subscriptions from a CSV file for a given user.
    * Validates each row, imports valid rows, skips invalid ones, and returns a detailed summary.
    */
-  async importFromCsv(userId: string, file?: Express.Multer.File) {
+  async importFromCsv(userId: string, file?: UploadedCsvFile) {
     if (!file || !file.buffer) {
       throw new BadRequestException('A CSV file is required');
     }
